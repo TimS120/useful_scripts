@@ -1,0 +1,17 @@
+Install flake8 and flake8-docstrings:
+
+pip install flake8 flake8-docstrings
+
+
+
+Create a setup file (e.g. ".flak8") with the following content:
+
+[flake8]
+select = D
+max-line-length = 120
+exclude = .git,__pycache__,docs
+
+
+
+Execute command:
+flake8 --config=/path/to/flake8/file/.flake8 /path/to/python/file.py
