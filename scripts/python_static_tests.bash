@@ -99,11 +99,21 @@ else
 fi
 
 print_header "=== Running isort import order checks ==="
+# isort options:
+#   --check-only    : report unsorted imports without applying changes
+#   --diff          : show unified diff of proposed changes (preferred for output)
+#   --verbose       : display configuration and file-level details
+#   You can configure import sections (stdlib, third-party, first-party) via pyproject.toml or setup.cfg
 if ! command -v isort &>/dev/null; then
     echo "  → isort not found, please install it to run import order checks."
 else
+    # First, check only and capture exit
     if ! isort --check-only "$PROJECT_DIR"; then
-        echo "  → isort reported issues above, continuing…"
+        echo "  → isort detected ordering issues. Showing diff of correct order:"
+        isort --diff "$PROJECT_DIR"  # shows how imports should be ordered
+        echo "  → apply suggested order with: isort '$PROJECT_DIR'"
+    else
+        echo -e "${GREEN}  → isort import order OK${NC}"
     fi
 fi
 
@@ -123,7 +133,11 @@ print_header "=== Running vulture unused code checks ==="
 if ! command -v vulture &>/dev/null; then
     echo "  → vulture not found, please install it to run unused code detection."
 else
-    if ! vulture "$PROJECT_DIR"; then
+    # Run vulture and filter out specific attribute warnings
+    RAW=$(vulture "$PROJECT_DIR") || true
+    FILTERED=$(echo "$RAW" | grep -Ev "unused attribute '(stamp|frame_id|data|z)'")
+    if [[ -n "$FILTERED" ]]; then
+        echo "$FILTERED"
         echo "  → vulture reported issues above, continuing…"
     fi
 fi
@@ -145,6 +159,16 @@ if command -v jscpd &>/dev/null; then
 else
     echo "  → jscpd not installed, skipping duplicate-code detection."
 fi
+
+# Trailing whitespace detection
+print_header "=== Checking for trailing whitespace ==="
+eval "$FIND_CMD" | while read -r file; do
+    trailing_ws=$(grep -EnH "[[:blank:]]+$" "$file" || true)
+    if [[ -n "$trailing_ws" ]]; then
+        echo -e "${YELLOW}--- trailing whitespace detected in $file ---${NC}"
+        echo "$trailing_ws"
+    fi
+done
 
 # Pylint naming convention (C0103) with threshold reporting
 PYLINT_THRESHOLD=10.0
