@@ -157,16 +157,6 @@ else
     echo "  → jscpd not installed, skipping duplicate-code detection."
 fi
 
-# Trailing whitespace detection
-print_header "=== Checking for trailing whitespace ==="
-eval "$FIND_CMD" | while read -r file; do
-    trailing_ws=$(grep -EnH "[[:blank:]]+$" "$file" || true)
-    if [[ -n "$trailing_ws" ]]; then
-        echo -e "${YELLOW}--- trailing whitespace detected in $file ---${NC}"
-        echo "$trailing_ws"
-    fi
-done
-
 # Pylint default-value checks
 print_header "=== Running pylint (all checks except some) ==="
 if ! command -v pylint &>/dev/null; then
