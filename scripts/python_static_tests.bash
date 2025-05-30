@@ -126,19 +126,6 @@ else
     fi
 fi
 
-print_header "=== Cyclomatic complexity check (radon) ==="
-# Cyclomatic complexity analysis (only report blocks with CC > 10)
-if ! command -v radon &>/dev/null; then
-    echo "  → radon not found, please install it to run complexity checks."
-else
-    CC_OUTPUT=$(radon cc "$PROJECT_DIR" -s -n C)
-    if [[ -n "$CC_OUTPUT" ]]; then
-        print_header "=== Running radon cyclomatic complexity checks (score > 10) ==="
-        echo "$CC_OUTPUT"
-        echo "  → radon reported issues above threshold, continuing…"
-    fi
-fi
-
 print_header "=== Running vulture unused code checks ==="
 if ! command -v vulture &>/dev/null; then
     echo "  → vulture not found, please install it to run unused code detection."
@@ -180,21 +167,18 @@ eval "$FIND_CMD" | while read -r file; do
     fi
 done
 
-# Pylint naming convention (C0103) with threshold reporting
-PYLINT_THRESHOLD=10.0
-print_header "=== Running pylint naming convention checks ==="
+# Pylint default-value checks
+print_header "=== Running pylint (all checks except some) ==="
 if ! command -v pylint &>/dev/null; then
-    echo "  → pylint not found, please install it to run naming convention checks."
+    echo "  → pylint not found, please install it to run lint checks."
 else
-    PYLINT_OUTPUT=$(pylint --disable=all --enable=C0103 "$PROJECT_DIR" 2>&1)
-    # Extract score: 'rated at X.XX/10'
-    PYLINT_SCORE=$(echo "$PYLINT_OUTPUT" | grep 'rated at' | awk '{print substr($7, 1, length($7)-3)}')
-    # Compare score to threshold
-    if awk "BEGIN {exit !($PYLINT_SCORE < $PYLINT_THRESHOLD)}"; then
-        echo "$PYLINT_OUTPUT"
-        echo "  → pylint score ${PYLINT_SCORE}/10 below threshold ${PYLINT_THRESHOLD}, continuing…"
+    # Disable missing-docstring, invalid-name, and fixme
+    if ! pylint \
+         --disable=C0301,W0201,R0902,R0904 \
+         "$PROJECT_DIR"; then
+        echo "  → pylint reported issues above (excluding disabled checks), continuing…"
     else
-        echo -e "${GREEN}  → pylint passed with ${PYLINT_SCORE}/10${NC}"
+        echo -e "${GREEN}  → pylint passed (with specified checks disabled)${NC}"
     fi
 fi
 
@@ -224,4 +208,20 @@ if grep -R -n --include="*.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
     exit 1
 else
     echo -e "${GREEN}  → No confusing Unicode punctuation found${NC}"
+fi
+
+print_header "=== Running lizard size & complexity checks ==="
+if ! command -v lizard &>/dev/null; then
+    echo "  → lizard not found, please install it to run advanced complexity checks."
+else
+    # Cyclomatic complexity threshold (CC > 10)
+    # NLOC threshold (lines > 50)
+    # Parameter count threshold (> 5)
+    # Token count threshold (> 100)
+    lizard \
+      -C 10 \
+      -L 50 \
+      -a 5 \
+      -Ttoken_count=150 \
+      "$PROJECT_DIR"
 fi
