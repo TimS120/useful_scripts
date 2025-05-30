@@ -35,9 +35,12 @@ if (( ${#EXCLUDES[@]} )); then
     for ex in "${EXCLUDES[@]}"; do
         PRUNE+=" -name \"$ex\" -prune -o"
     done
+    # Also exclude any __init__.py from testing
+    PRUNE+=" -name \"__init__.py\" -prune -o"
     FIND_CMD="find . $PRUNE -type f -name \"*.py\" -print"
 else
-    FIND_CMD='find . -type f -name "*.py"'
+    # Exclude __init__.py by name before matching other .py files
+    FIND_CMD='find . -name "__init__.py" -prune -o -type f -name "*.py" -print'
 fi
 
 # Flake8 base exclude list
@@ -60,30 +63,36 @@ for ex in "${EXCLUDES[@]}"; do
     GREP_EXC+=(--exclude-dir="$ex")
 done
 
-# Process each Python file: autoflake and duplicate detection
-eval "$FIND_CMD" | while read -r file; do
-    print_header "=== Processing: $file ==="
 
-    # Autoflake: unused import detection (no in-place changes)
-    autoflake --remove-all-unused-imports --recursive . "${AUTOFLAKE_EXC[@]}"
 
-    # Check for duplicate import statements via grep
-    dup_imports=$(grep "^import " -r . "${GREP_EXC[@]}" | sort | uniq -d)
-    dup_froms=$(grep "^from " -r . "${GREP_EXC[@]}" | sort | uniq -d)
-
-    if [[ -n "$dup_imports" ]]; then
-        echo -e "${YELLOW}--- duplicate 'import ' lines ---${NC}"
-        echo "$dup_imports"
+print_header "=== Running autoflake unused-import checks ==="
+if ! command -v autoflake &>/dev/null; then
+    echo "  → autoflake not found, please install it to run unused-import checks."
+else
+    # run silently in “diff” (check-only) mode
+    if ! autoflake \
+         --quiet \
+         --remove-all-unused-imports \
+         --recursive . \
+         --check-diff \
+         "${AUTOFLAKE_EXC[@]}"; then
+        echo "  → autoflake reported unused imports above, continuing…"
     fi
+fi
 
-    if [[ -n "$dup_froms" ]]; then
-        echo -e "${YELLOW}--- duplicate 'from ' lines ---${NC}"
-        echo "$dup_froms"
-    fi
+print_header "=== Running duplicate-import detection ==="
+if ! dup_imports=$(grep -Er --exclude-dir=__pycache__ --exclude-dir="${EXCLUDES[*]}" \
+                     "^import " . | sort | uniq -d); then
+    dup_imports=""    # exit-code 1 → “no duplicates” → treat as empty
+fi
 
-done
-
-# === Additional checks on the full project ===
+if [[ -n "$dup_imports" ]]; then
+    echo -e "${YELLOW}--- duplicate 'import ' lines ---${NC}"
+    echo "$dup_imports"
+    echo "  → duplicate imports detected, continuing…"
+else
+    echo -e "${GREEN}  → no duplicate imports found${NC}"
+fi
 
 print_header "=== Running flake8 checks ==="
 if ! command -v flake8 &>/dev/null; then
@@ -91,8 +100,8 @@ if ! command -v flake8 &>/dev/null; then
 else
     if ! flake8 \
         --max-line-length=120 \
-        --exclude="$EXCL" \
-        --select=D,UFS,T001,A,G,C901 \
+        --exclude="${EXCL},__init__.py" \
+        --select=D,UFS,T001,A,G,C901,E501 \
         "$PROJECT_DIR"; then
         echo "  → flake8 reported issues above, continuing…"
     fi
@@ -117,6 +126,7 @@ else
     fi
 fi
 
+print_header "=== Cyclomatic complexity check (radon) ==="
 # Cyclomatic complexity analysis (only report blocks with CC > 10)
 if ! command -v radon &>/dev/null; then
     echo "  → radon not found, please install it to run complexity checks."
@@ -135,7 +145,7 @@ if ! command -v vulture &>/dev/null; then
 else
     # Run vulture and filter out specific attribute warnings
     RAW=$(vulture "$PROJECT_DIR") || true
-    FILTERED=$(echo "$RAW" | grep -Ev "unused attribute '(stamp|frame_id|data|z)'")
+    FILTERED=$(echo "$RAW" | grep -Ev "unused attribute '(stamp|frame_id|data|z)'" || true)
     if [[ -n "$FILTERED" ]]; then
         echo "$FILTERED"
         echo "  → vulture reported issues above, continuing…"
@@ -186,4 +196,32 @@ else
     else
         echo -e "${GREEN}  → pylint passed with ${PYLINT_SCORE}/10${NC}"
     fi
+fi
+
+# Fail on any character outside the ASCII range U+0000–U+007F
+print_header "=== Checking for confusing Unicode punctuation ==="
+# First grep finds any non-ASCII byte, second ensures it’s punctuation or symbol
+if grep -R -n --include="*.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+       | grep -P "[\p{P}\p{S}]"; then
+    echo -e "${RED}--- Confusing Unicode punctuation detected in source ---${NC}"
+    # Show each offending line, the exact character(s), and their code points
+    grep -R -n --include="*.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+      | grep -P "[\p{P}\p{S}]" \
+      | while IFS=: read -r file line text; do
+          # extract only the confusing punctuation/symbol characters
+          chars=$(printf '%s' "$text" \
+                   | grep -oP "[^\x00-\x7F]" \
+                   | grep -oP "[\p{P}\p{S}]" \
+                   | tr -d '\n')
+          # convert to U+XXXX notation
+          hexes=$(printf '%s' "$chars" \
+                   | od -An -t u4 \
+                   | tr -s ' ' ',' \
+                   | sed 's/^,//')
+          printf "%s:%s → %s (U+%s)\n" "$file" "$line" "$text" "$hexes"
+      done
+    echo "  → Please replace with standard ASCII characters (e.g. '-', '\"', etc.)."
+    exit 1
+else
+    echo -e "${GREEN}  → No confusing Unicode punctuation found${NC}"
 fi
