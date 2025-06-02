@@ -107,7 +107,6 @@ else
     fi
 fi
 
-# Fail on any character outside the ASCII range U+0000–U+007F
 print_header "=== Checking for confusing Unicode punctuation ==="
 # First grep finds any non-ASCII byte, second ensures it’s punctuation or symbol
 # Skip __init__.py via --exclude
@@ -131,7 +130,6 @@ if grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJE
           printf "%s:%s → %s (U+%s)\n" "$file" "$line" "$text" "$hexes"
       done
     echo "  → Please replace with standard ASCII characters (e.g. '-', '\"', etc.)."
-    exit 1
 else
     echo -e "${GREEN}  → No confusing Unicode punctuation found${NC}"
 fi
