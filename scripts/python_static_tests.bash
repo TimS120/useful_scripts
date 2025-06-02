@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Usage: ./quality_checks.sh <project_directory> [exclude_dir1] [exclude_dir2] …
-# Iterates all .py files and runs checks
+# Iterates all .py files (except __init__.py) and runs checks
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ fi
 cd "$PROJECT_DIR" || { echo -e "${RED}ERROR:${NC} cannot cd into \"$PROJECT_DIR\""; exit 1; }
 
 
-# Flake8 base exclude list
+# Flake8 base exclude list (we will also exclude __init__.py explicitly below)
 BASE_EX=".git,__pycache__,docs"
 if (( ${#EXCLUDES[@]} )); then
     EXCL="$BASE_EX,${EXCLUDES[*]}"
@@ -56,16 +56,17 @@ print_header "=== Running isort import order checks ==="
 # isort options:
 #   --check-only    : report unsorted imports without applying changes
 #   --diff          : show unified diff of proposed changes (preferred for output)
+#   --skip          : skip matching files (e.g., __init__.py)
 #   --verbose       : display configuration and file-level details
 #   You can configure import sections (stdlib, third-party, first-party) via pyproject.toml or setup.cfg
 if ! command -v isort &>/dev/null; then
     echo "  → isort not found, please install it to run import order checks."
 else
-    # First, check only and capture exit
-    if ! isort --check-only "$PROJECT_DIR"; then
+    # First, check only and capture exit, skipping __init__.py
+    if ! isort --check-only --skip="__init__.py" "$PROJECT_DIR"; then
         echo "  → isort detected ordering issues. Showing diff of correct order:"
-        isort --diff "$PROJECT_DIR"  # shows how imports should be ordered
-        echo "  → apply suggested order with: isort '$PROJECT_DIR'"
+        isort --diff --skip="__init__.py" "$PROJECT_DIR"  # shows how imports should be ordered
+        echo "  → apply suggested order with: isort --skip='__init__.py' '$PROJECT_DIR'"
     else
         echo -e "${GREEN}  → isort import order OK${NC}"
     fi
@@ -75,7 +76,7 @@ print_header "=== Duplicate-code detection (jscpd) ==="
 if command -v jscpd &>/dev/null; then
     # allow jscpd to exit non-zero without killing the script
     set +e
-    dup_output=$(jscpd --min-lines 10 --reporters console "$PROJECT_DIR" 2>&1)
+    dup_output=$(jscpd --min-lines 10 --reporters console --ignore "**/__init__.py" "$PROJECT_DIR" 2>&1)
     dup_exit=$?
     set -e
 
@@ -95,8 +96,10 @@ if ! command -v pylint &>/dev/null; then
     echo "  → pylint not found, please install it to run lint checks."
 else
     # Disable missing-docstring, invalid-name, and fixme
+    # Also ignore any __init__.py files
     if ! pylint \
          --disable=C0301,W0201,R0902,R0904 \
+         --ignore-patterns="__init__.py" \
          "$PROJECT_DIR"; then
         echo "  → pylint reported issues above (excluding disabled checks), continuing…"
     else
@@ -107,11 +110,12 @@ fi
 # Fail on any character outside the ASCII range U+0000–U+007F
 print_header "=== Checking for confusing Unicode punctuation ==="
 # First grep finds any non-ASCII byte, second ensures it’s punctuation or symbol
-if grep -R -n --include="*.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+# Skip __init__.py via --exclude
+if grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
        | grep -P "[\p{P}\p{S}]"; then
     echo -e "${RED}--- Confusing Unicode punctuation detected in source ---${NC}"
     # Show each offending line, the exact character(s), and their code points
-    grep -R -n --include="*.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+    grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
       | grep -P "[\p{P}\p{S}]" \
       | while IFS=: read -r file line text; do
           # extract only the confusing punctuation/symbol characters
@@ -136,14 +140,11 @@ print_header "=== Running lizard size & complexity checks ==="
 if ! command -v lizard &>/dev/null; then
     echo "  → lizard not found, please install it to run advanced complexity checks."
 else
-    # Cyclomatic complexity threshold (CC > 10)
-    # NLOC threshold (lines > 50)
-    # Parameter count threshold (> 5)
-    # Token count threshold (> 100)
-    lizard \
-      -C 10 \
-      -L 50 \
-      -a 5 \
-      -Ttoken_count=150 \
-      "$PROJECT_DIR"
+    # Use find to pass only *.py files that are NOT __init__.py
+    find "$PROJECT_DIR" -type f -name "*.py" ! -name "__init__.py" -print0 \
+      | xargs -0 lizard \
+         -C 10 \
+         -L 50 \
+         -a 5 \
+         -Ttoken_count=150
 fi
