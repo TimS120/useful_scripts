@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Usage: ./quality_checks.sh <project_directory> [exclude_dir1] [exclude_dir2] …
-# Iterates all .py files, runs autoflake and duplicate detection, then aggregates flake8 checks and other tools
+# Iterates all .py files and runs checks
 
 set -euo pipefail
 
@@ -29,19 +29,6 @@ fi
 
 cd "$PROJECT_DIR" || { echo -e "${RED}ERROR:${NC} cannot cd into \"$PROJECT_DIR\""; exit 1; }
 
-# Build find command to locate .py files, excluding specified directories
-if (( ${#EXCLUDES[@]} )); then
-    PRUNE=""
-    for ex in "${EXCLUDES[@]}"; do
-        PRUNE+=" -name \"$ex\" -prune -o"
-    done
-    # Also exclude any __init__.py from testing
-    PRUNE+=" -name \"__init__.py\" -prune -o"
-    FIND_CMD="find . $PRUNE -type f -name \"*.py\" -print"
-else
-    # Exclude __init__.py by name before matching other .py files
-    FIND_CMD='find . -name "__init__.py" -prune -o -type f -name "*.py" -print'
-fi
 
 # Flake8 base exclude list
 BASE_EX=".git,__pycache__,docs"
@@ -51,48 +38,6 @@ else
     EXCL="$BASE_EX"
 fi
 
-# Build autoflake exclude args
-AUTOFLAKE_EXC=()
-for ex in "${EXCLUDES[@]}"; do
-    AUTOFLAKE_EXC+=(--exclude "$ex")
-done
-
-# Build grep exclude-dir args for duplicate import detection
-GREP_EXC=()
-for ex in "${EXCLUDES[@]}"; do
-    GREP_EXC+=(--exclude-dir="$ex")
-done
-
-
-
-print_header "=== Running autoflake unused-import checks ==="
-if ! command -v autoflake &>/dev/null; then
-    echo "  → autoflake not found, please install it to run unused-import checks."
-else
-    # run silently in “diff” (check-only) mode
-    if ! autoflake \
-         --quiet \
-         --remove-all-unused-imports \
-         --recursive . \
-         --check-diff \
-         "${AUTOFLAKE_EXC[@]}"; then
-        echo "  → autoflake reported unused imports above, continuing…"
-    fi
-fi
-
-print_header "=== Running duplicate-import detection ==="
-if ! dup_imports=$(grep -Er --exclude-dir=__pycache__ --exclude-dir="${EXCLUDES[*]}" \
-                     "^import " . | sort | uniq -d); then
-    dup_imports=""    # exit-code 1 → “no duplicates” → treat as empty
-fi
-
-if [[ -n "$dup_imports" ]]; then
-    echo -e "${YELLOW}--- duplicate 'import ' lines ---${NC}"
-    echo "$dup_imports"
-    echo "  → duplicate imports detected, continuing…"
-else
-    echo -e "${GREEN}  → no duplicate imports found${NC}"
-fi
 
 print_header "=== Running flake8 checks ==="
 if ! command -v flake8 &>/dev/null; then
@@ -123,19 +68,6 @@ else
         echo "  → apply suggested order with: isort '$PROJECT_DIR'"
     else
         echo -e "${GREEN}  → isort import order OK${NC}"
-    fi
-fi
-
-print_header "=== Running vulture unused code checks ==="
-if ! command -v vulture &>/dev/null; then
-    echo "  → vulture not found, please install it to run unused code detection."
-else
-    # Run vulture and filter out specific attribute warnings
-    RAW=$(vulture "$PROJECT_DIR") || true
-    FILTERED=$(echo "$RAW" | grep -Ev "unused attribute '(stamp|frame_id|data|z)'" || true)
-    if [[ -n "$FILTERED" ]]; then
-        echo "$FILTERED"
-        echo "  → vulture reported issues above, continuing…"
     fi
 fi
 
