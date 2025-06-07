@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
 Interactive image cropping tool.
+
 Select the Crop Region
     Click two points on the image to mark the opposite corners of the desired crop region.
     If you make a mistake, press 'r' to reset your selection.
-    After selecting two points, the script will automatically crop the image and save it in the same directory with the filename modified by appending "_cut" before the file extension.
+    After selecting two points, the script will automatically crop the image and save it in 
+    the same directory with the filename modified by appending "_cut" before the file extension.
     You can also press 'q' to quit without cropping.
     
 Usage:
     python crop_image.py <image_path>
 """
 
-import cv2
-import sys
 import os
+import sys
+
+import cv2
 
 # Global list to store the two selected points
 refPt = []
 
 
 def click_and_crop(event, x, y, flags, param):
-    """
-    Mouse callback function that records two left-button clicks and draws
-    a circle and a rectangle on the image.
-    """
+    """Mouse callback function that records two left-button clicks and draws a circle and a rectangle on the image."""
     global refPt, image, clone
 
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -37,10 +37,7 @@ def click_and_crop(event, x, y, flags, param):
 
 
 def main():
-    """
-    Main function to load an image, handle user input for cropping,
-    and save the cropped image.
-    """
+    """Load an image, handle user input for cropping, and save the cropped image."""
     global image, clone, refPt
 
     if len(sys.argv) < 2:

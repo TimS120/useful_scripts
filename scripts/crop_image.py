@@ -3,14 +3,16 @@
 
 """
 Crop an image by a certain amount of pixels at every side.
+
 The cropped image will be saved beside the input image with
 the name <input_image>_cropped.<file_extension>
 
 Usage: python3 crop_image.py path/to/your/image.jpg
 """
 
-import os
 import argparse
+import os
+
 from PIL import Image
 
 crop_left = 0
@@ -19,10 +21,7 @@ crop_bottom = 0
 crop_top = 0
 
 def crop_image(input_path):
-    """
-    Crop the image by 5 pixels at the top, 4 pixels at the left,
-    7 pixels at the right, and 1 pixel at the bottom.
-    """
+    """Crop the image by the specified pixel values at the respective sides."""
     image = Image.open(input_path)
     width, height = image.size
     left = crop_left
@@ -34,8 +33,9 @@ def crop_image(input_path):
 
 def save_cropped_image(image, input_path):
     """
-    Save the cropped image beside the input image
-    with the name <input_image>_cropped.<file_extension>.
+    Save the cropped image beside the input image.
+    
+    The names are specified by: <input_image>_cropped.<file_extension>.
     """
     directory, filename = os.path.split(input_path)
     name, ext = os.path.splitext(filename)
@@ -45,9 +45,7 @@ def save_cropped_image(image, input_path):
     print(f"Saved cropped image to {output_path}")
 
 def parse_arguments():
-    """
-    Parse command-line arguments.
-    """
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Crop an image by fixed pixel amounts."
     )
@@ -58,13 +56,10 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
-    """
-    Main function to execute the cropping operation.
-    """
+    """Execute the cropping operation."""
     args = parse_arguments()
     cropped_image = crop_image(args.input_image)
     save_cropped_image(cropped_image, args.input_image)
 
 if __name__ == "__main__":
     main()
-

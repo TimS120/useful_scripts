@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Usage: ./quality_checks.sh <project_directory> [exclude_dir1] [exclude_dir2] …
+# Usage: ./quality_checks.sh <project_directory> [exclude_dir1] [exclude_dir2] ...
 # Iterates all .py files (except __init__.py) and runs checks
 
 set -euo pipefail
@@ -23,7 +23,7 @@ shift || true
 EXCLUDES=("$@")
 
 if [[ -z "$PROJECT_DIR" ]]; then
-    echo "Usage: $0 <project_directory> [exclude_dir1] [exclude_dir2] …"
+    echo "Usage: $0 <project_directory> [exclude_dir1] [exclude_dir2] ..."
     exit 1
 fi
 
@@ -90,6 +90,35 @@ else
     echo "  → jscpd not installed, skipping duplicate-code detection."
 fi
 
+print_header "=== Checking for confusing Unicode punctuation ==="
+# First grep finds any non-ASCII byte, second ensures it’s punctuation or symbol
+# Skip __init__.py via --exclude
+if grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+       | grep -P "[\p{P}\p{S}]"; then
+    echo -e "${RED}--- Confusing Unicode punctuation detected in source ---${NC}"
+    # Show each offending line, the exact character(s), and their code points
+    # temporarily disable “exit on error” so this pipeline can fail harmlessly
+    set +e
+    grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
+      | grep -P "[\p{P}\p{S}]" \
+      | while IFS=: read -r file line text; do
+          chars=$(printf '%s' "$text" \
+                   | grep -oP "[^\x00-\x7F]" \
+                   | grep -oP "[\p{P}\p{S}]" \
+                   | tr -d '\n')
+          hexes=$(printf '%s' "$chars" \
+                   | od -An -t u4 \
+                   | tr -s ' ' ',' \
+                   | sed 's/^,//')
+          printf "%s:%s → %s (U+%s)\n" "$file" "$line" "$text" "$hexes"
+      done
+    # restore “exit on error” behavior
+    set -e
+    echo "  → Please replace with standard ASCII characters (e.g. '-', '\"', etc.)."
+else
+    echo -e "${GREEN}  → No confusing Unicode punctuation found${NC}"
+fi
+
 # Pylint default-value checks
 print_header "=== Running pylint (all checks except some) ==="
 if ! command -v pylint &>/dev/null; then
@@ -105,33 +134,6 @@ else
     else
         echo -e "${GREEN}  → pylint passed (with specified checks disabled)${NC}"
     fi
-fi
-
-print_header "=== Checking for confusing Unicode punctuation ==="
-# First grep finds any non-ASCII byte, second ensures it’s punctuation or symbol
-# Skip __init__.py via --exclude
-if grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
-       | grep -P "[\p{P}\p{S}]"; then
-    echo -e "${RED}--- Confusing Unicode punctuation detected in source ---${NC}"
-    # Show each offending line, the exact character(s), and their code points
-    grep -R -n --include="*.py" --exclude="__init__.py" -P "[^\x00-\x7F]" "$PROJECT_DIR" \
-      | grep -P "[\p{P}\p{S}]" \
-      | while IFS=: read -r file line text; do
-          # extract only the confusing punctuation/symbol characters
-          chars=$(printf '%s' "$text" \
-                   | grep -oP "[^\x00-\x7F]" \
-                   | grep -oP "[\p{P}\p{S}]" \
-                   | tr -d '\n')
-          # convert to U+XXXX notation
-          hexes=$(printf '%s' "$chars" \
-                   | od -An -t u4 \
-                   | tr -s ' ' ',' \
-                   | sed 's/^,//')
-          printf "%s:%s → %s (U+%s)\n" "$file" "$line" "$text" "$hexes"
-      done
-    echo "  → Please replace with standard ASCII characters (e.g. '-', '\"', etc.)."
-else
-    echo -e "${GREEN}  → No confusing Unicode punctuation found${NC}"
 fi
 
 print_header "=== Running lizard size & complexity checks ==="

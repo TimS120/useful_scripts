@@ -5,15 +5,16 @@ Usage:
     python mp4_to_saved_images.py <video_path> <output_folder> [--step N] [--rotate DEG]
 """
 
+import argparse
 import os
 import sys
-import argparse
+
 import cv2
 
 
 def parse_args():
     """
-    Parse command‑line arguments.
+    Parse command-line arguments.
 
     Returns:
         argparse.Namespace: Parsed arguments with attributes
@@ -44,7 +45,7 @@ def parse_args():
         help=(
             "Rotate frames by DEG degrees. "
             "+90 = turn right (clockwise), -90 = turn left (counter-clockwise). "
-            "180 flips upside down; 270 is 3×90."
+            "180 flips upside down; 270 is 3x90."
         )
     )
     return parser.parse_args()
@@ -57,15 +58,14 @@ def extract_frames(
     rotate: int = 0
 ) -> int:
     """
-    Extract frames from the specified video file, optionally rotating
-    and saving only every Nth frame.
+    Extract frames from the specified video file, optionally rotating and saving only every Nth frame.
 
     Args:
         video_path (str): Path to the MP4 video file.
         output_folder (str): Path to save frames.
         step (int): Save every Nth frame. Defaults to 1.
         rotate (int): Rotation in degrees; positive = clockwise,
-            negative = counter-clockwise. Must be ±90, 180 or 270.
+            negative = counter-clockwise. Must be +-90, 180 or 270.
             Defaults to 0 (no rotation).
 
     Returns:
@@ -121,9 +121,7 @@ def extract_frames(
 
 
 def main() -> None:
-    """
-    Entry point for the frame extraction script.
-    """
+    """Entry point for the frame extraction script."""
     args = parse_args()
     count = extract_frames(
         args.video_path,

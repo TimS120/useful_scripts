@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+
 from PIL import Image
 
 
@@ -47,9 +48,7 @@ def parse_arguments():
 
 
 def main():
-    """
-    Main function to execute the image resizing.
-    """
+    """Execute the image resizing."""
     args = parse_arguments()
     resize_image(args.input, args.output)
     print(f"Resized image saved as: {args.output}")

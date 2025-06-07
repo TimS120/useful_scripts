@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Usage: python3 copy_files_to_clipboard.py /path/to/overall_folder
+Usage: python3 copy_files_to_clipboard.py /path/to/overall_folder .
+
 This script recursively copies the content of all readable text files 
 in the specified folder to the clipboard using the Windows "clip" command.
 """
 
 import os
-import sys
 import subprocess
+import sys
 
 
 def is_text_file(file_path):
@@ -38,8 +39,7 @@ def is_text_file(file_path):
 
 def main():
     """
-    Recursively copy the contents of all readable text files in the specified folder
-    to the clipboard using the Windows "clip" command.
+    Recursively copy the contents of all readable text files in the specified folder to clipboard.
 
     For each file:
     - A separator and the relative path are added.
