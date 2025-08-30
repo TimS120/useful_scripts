@@ -60,7 +60,10 @@ def main():
 
     output_parts = []
 
-    for root, _, files in os.walk(base_dir):
+    for root, dirs, files in os.walk(base_dir):
+        # Exclude hidden directories (starting with ".")
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+
         for file_name in files:
             file_path = os.path.join(root, file_name)
             if os.access(file_path, os.R_OK):
