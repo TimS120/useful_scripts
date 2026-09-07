@@ -1,0 +1,6 @@
+# Dependencies for scripts outside scripts/ros2/
+PyMuPDF
+Pillow
+numpy
+opencv-python
+pywin32
